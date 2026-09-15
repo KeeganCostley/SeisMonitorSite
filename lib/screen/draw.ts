@@ -186,11 +186,15 @@ function drawGlobe(ctx: CanvasRenderingContext2D, cx: number, cy: number, rot: n
 interface MonitorInput {
   region: RegionValue
   latest: Quake | null
-  high24: Quake | null
+  // Every quake within HIGHS24_BAND of the day's strongest (see app/api/quakes/route.ts) -- the
+  // "24H HIGH" cell cycles through these every 30s, matching the firmware exactly, instead of only
+  // ever showing the single strongest one.
+  highs24: Quake[]
   seismoSamples: number[]
   nowMs: number
   globeRotation: number
 }
+const HIGHS24_CYCLE_MS = 30000
 
 const PAD = 6
 const GAP = 5
@@ -209,7 +213,10 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
   const t = THEME
   const region = input.region
   const latest = input.latest
-  const high24 = input.high24
+  const highs24 = input.highs24
+  const high24 = highs24.length
+    ? highs24[Math.floor(input.nowMs / HIGHS24_CYCLE_MS) % highs24.length]
+    : null
   const seismoSamples = input.seismoSamples
   const nowMs = input.nowMs
   const globeRotation = input.globeRotation
@@ -232,7 +239,8 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
   // Full names, matching the real firmware header exactly (SEISMONITOR, not SEIS; the full region
   // name, not the "NZ" code). Sized down only if it would actually run into the clock/WIFI cluster
   // on the right -- measured via the canvas's own metrics, not assumed (see [[seismonitor-site]]).
-  const headerText = '\u25C9 SEISMONITOR \u00B7 AOTEAROA NEW ZEALAND'
+  const regionMeta = REGIONS.find((r) => r.value === region) ?? REGIONS[0]
+  const headerText = '◉ SEISMONITOR · ' + regionMeta.headerLabel
   let headerPx = 10
   ctx.font = '700 ' + headerPx + 'px "JetBrains Mono", ui-monospace, monospace'
   const rightClusterStart = SCREEN_W - 26 - ctx.measureText('00:00 \u00B7 WIFI').width - 4
@@ -306,7 +314,20 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
   ctx.moveTo(LEFT_X + 8, DATA_TOP + cellH + 0.5)
   ctx.lineTo(LEFT_X + LEFT_W - 8, DATA_TOP + cellH + 0.5)
   ctx.stroke()
-  drawCell(DATA_TOP + cellH, '\u25C6 24H HIGH', t.highest, high24, '')
+
+  // "24H HIGH" -> "24H HIGHS" once there's more than one quake cycling through the cell -- matches
+  // the firmware's plural label exactly (see [[24h-highs-cycling]]), only flipping if it still fits
+  // beside the M#.# on the same row (measured via the canvas's own metrics, not assumed).
+  let hiLabel = '\u25C6 24H HIGH'
+  if (highs24.length > 1) {
+    const maxW = LEFT_W - 12
+    ctx.font = '700 8px "JetBrains Mono", ui-monospace, monospace'
+    const wPlural = ctx.measureText('\u25C6 24H HIGHS').width
+    ctx.font = '700 18px "JetBrains Mono", ui-monospace, monospace'
+    const wMag = ctx.measureText(high24 ? 'M' + high24.mag.toFixed(1) : '\u2014').width
+    if (wPlural + wMag <= maxW) hiLabel = '\u25C6 24H HIGHS'
+  }
+  drawCell(DATA_TOP + cellH, hiLabel, t.highest, high24, '')
 
   // seismograph panel
   roundRectPath(ctx, LEFT_X + 0.5, SEISMO_TOP + 0.5, LEFT_W - 1, SEISMO_H - 1, 3)
@@ -397,116 +418,124 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
 
   const cx = (mpW - 1) / 2
   const cy = (mpH - 1) / 2
-  const rings: [number, keyof typeof THEME, string][] = [
-    [30, 'ring1', '100'],
-    [54, 'ring2', '200'],
-    [78, 'ring3', '300'],
-    [98, 'ring4', '500'],
-  ]
-  const labelAngle = Math.PI * 0.82
-  ctx.font = '6.5px monospace'
-  ctx.textAlign = 'center'
-  for (const ring of rings) {
-    const r = ring[0]
-    const colorKey = ring[1]
-    const label = ring[2]
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.strokeStyle = t[colorKey]
-    ctx.lineWidth = 0.7
-    ctx.setLineDash([2, 3])
-    ctx.stroke()
-    ctx.setLineDash([])
-    ctx.fillStyle = t.sub
-    ctx.fillText(label, cx + Math.cos(labelAngle) * r, cy + Math.sin(labelAngle) * r)
-  }
 
-  ctx.strokeStyle = t.secondary
-  ctx.globalAlpha = 0.6
-  ctx.lineWidth = 0.6
-  ctx.beginPath()
-  ctx.moveTo(cx - 6, cy)
-  ctx.lineTo(cx + 6, cy)
-  ctx.moveTo(cx, cy - 6)
-  ctx.lineTo(cx, cy + 6)
-  ctx.stroke()
-  ctx.globalAlpha = 1
-
-  const boxW = 150
-  const boxH = 190
-  const gx = cx - boxW / 2
-  const gy = cy - boxH / 2
-  const nz = nzProject(boxW, boxH, 8)
-
-  ctx.save()
-  ctx.translate(gx, gy)
-  ctx.fillStyle = t.mapLand
-  ctx.strokeStyle = t.mapOutline
-  ctx.lineWidth = 1.1
-  ctx.lineJoin = 'round'
-  ctx.lineCap = 'round'
-  const polys = [nz.north, nz.south, nz.stewart]
-  for (const poly of polys) {
-    ctx.beginPath()
-    for (let i = 0; i < poly.length; i++) {
-      const p = poly[i]
-      if (i === 0) ctx.moveTo(p[0], p[1])
-      else ctx.lineTo(p[0], p[1])
+  if (region === 'nz') {
+    const rings: [number, keyof typeof THEME, string][] = [
+      [30, 'ring1', '100'],
+      [54, 'ring2', '200'],
+      [78, 'ring3', '300'],
+      [98, 'ring4', '500'],
+    ]
+    const labelAngle = Math.PI * 0.82
+    ctx.font = '6.5px monospace'
+    ctx.textAlign = 'center'
+    for (const ring of rings) {
+      const r = ring[0]
+      const colorKey = ring[1]
+      const label = ring[2]
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.strokeStyle = t[colorKey]
+      ctx.lineWidth = 0.7
+      ctx.setLineDash([2, 3])
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = t.sub
+      ctx.fillText(label, cx + Math.cos(labelAngle) * r, cy + Math.sin(labelAngle) * r)
     }
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
-  }
 
-  const drawMarker = (
-    q: Quake | null,
-    color: string,
-    outerR: number,
-    outerA: number,
-    midR: number,
-    innerR: number
-  ) => {
-    if (!q) return
-    const proj = nz.project(q.lat, q.lon)
-    const mx = proj[0]
-    const my = proj[1]
-    ctx.strokeStyle = color
-    ctx.globalAlpha = 0.5
-    ctx.lineWidth = 0.4
-    ctx.setLineDash([1.5, 2])
+    ctx.strokeStyle = t.secondary
+    ctx.globalAlpha = 0.6
+    ctx.lineWidth = 0.6
     ctx.beginPath()
-    ctx.moveTo(boxW / 2, boxH / 2)
-    ctx.lineTo(mx, my)
+    ctx.moveTo(cx - 6, cy)
+    ctx.lineTo(cx + 6, cy)
+    ctx.moveTo(cx, cy - 6)
+    ctx.lineTo(cx, cy + 6)
     ctx.stroke()
-    ctx.setLineDash([])
     ctx.globalAlpha = 1
 
-    ctx.fillStyle = rgba(color, outerA)
-    ctx.beginPath()
-    ctx.arc(mx, my, outerR, 0, Math.PI * 2)
-    ctx.fill()
+    const boxW = 150
+    const boxH = 190
+    const gx = cx - boxW / 2
+    const gy = cy - boxH / 2
+    const nz = nzProject(boxW, boxH, 8)
 
-    ctx.strokeStyle = color
-    ctx.lineWidth = 0.7
-    ctx.beginPath()
-    ctx.arc(mx, my, midR, 0, Math.PI * 2)
-    ctx.stroke()
+    ctx.save()
+    ctx.translate(gx, gy)
+    ctx.fillStyle = t.mapLand
+    ctx.strokeStyle = t.mapOutline
+    ctx.lineWidth = 1.1
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    const polys = [nz.north, nz.south, nz.stewart]
+    for (const poly of polys) {
+      ctx.beginPath()
+      for (let i = 0; i < poly.length; i++) {
+        const p = poly[i]
+        if (i === 0) ctx.moveTo(p[0], p[1])
+        else ctx.lineTo(p[0], p[1])
+      }
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
 
-    ctx.fillStyle = color
-    ctx.beginPath()
-    ctx.arc(mx, my, innerR, 0, Math.PI * 2)
-    ctx.fill()
+    const drawMarker = (
+      q: Quake | null,
+      color: string,
+      outerR: number,
+      outerA: number,
+      midR: number,
+      innerR: number
+    ) => {
+      if (!q) return
+      const proj = nz.project(q.lat, q.lon)
+      const mx = proj[0]
+      const my = proj[1]
+      ctx.strokeStyle = color
+      ctx.globalAlpha = 0.5
+      ctx.lineWidth = 0.4
+      ctx.setLineDash([1.5, 2])
+      ctx.beginPath()
+      ctx.moveTo(boxW / 2, boxH / 2)
+      ctx.lineTo(mx, my)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.globalAlpha = 1
+
+      ctx.fillStyle = rgba(color, outerA)
+      ctx.beginPath()
+      ctx.arc(mx, my, outerR, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.strokeStyle = color
+      ctx.lineWidth = 0.7
+      ctx.beginPath()
+      ctx.arc(mx, my, midR, 0, Math.PI * 2)
+      ctx.stroke()
+
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.arc(mx, my, innerR, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    drawMarker(latest, t.latest, 9, 0.12, 4.5, 2)
+    drawMarker(high24, t.highest, 8, 0.1, 3.5, 1.7)
+    ctx.restore()
+  } else {
+    // No dedicated flat map ported yet for Japan/California/China -- the globe
+    // is a real, accurate fallback for all non-NZ regions (matches what the
+    // firmware itself falls back to before a region's map exists).
+    drawGlobe(ctx, cx, cy, globeRotation, latest, high24)
   }
-  drawMarker(latest, t.latest, 9, 0.12, 4.5, 2)
-  drawMarker(high24, t.highest, 8, 0.1, 3.5, 1.7)
-  ctx.restore()
   ctx.restore()
 
   // Data-source credit, bottom-right of the map panel -- matches the real firmware exactly.
   ctx.textAlign = 'right'
   ctx.font = '6.5px monospace'
   ctx.fillStyle = t.secondary
-  ctx.fillText('POWERED BY GEONET', mpX + mpW - 6, mpY + mpH - 8)
+  ctx.fillText(region === 'nz' ? 'POWERED BY GEONET' : 'POWERED BY USGS', mpX + mpW - 6, mpY + mpH - 8)
 }
 
 interface AlertInput {
