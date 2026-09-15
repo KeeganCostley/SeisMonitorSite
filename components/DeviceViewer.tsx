@@ -6,8 +6,9 @@ import { Canvas, useFrame, useLoader } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, PerspectiveCamera } from '@react-three/drei'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import * as THREE from 'three'
-import { drawMonitorNZ, drawAlert } from '@/lib/screen/draw'
+import { drawMonitor, drawAlert } from '@/lib/screen/draw'
 import { seisTrace } from '@/lib/screen/seismo'
+import type { RegionValue } from '@/lib/screen/theme'
 import {
   SCREEN_CENTER,
   SCREEN_NORMAL,
@@ -23,21 +24,22 @@ import type { Quake, QuakeFeed } from '@/lib/quakes/types'
 const IDLE_MS = 26000 // time on the monitor screen between demo alerts
 const ALERT_MS = 6000 // how long the alert takeover holds (device does 25s; shortened for a site preview)
 const FEED_POLL_MS = 60000
+const GLOBE_ROT_RAD_PER_S = 0.1333 // matches the firmware exactly: 0.012 rad every 90ms
 
-const EMPTY_FEED: QuakeFeed = { latest: null, high24: null, recent: [], source: 'fallback' }
+const EMPTY_FEED: QuakeFeed = { latest: null, high24: null, highs24: [], recent: [], source: 'fallback' }
 
 function BodyMesh({ url, color }: { url: string; color: string }) {
   const geometry = useLoader(STLLoader, url)
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.82} metalness={0.08} />
+      <meshStandardMaterial color={color} roughness={0.68} metalness={0.15} flatShading />
     </mesh>
   )
 }
 
 type Mode = 'monitor' | 'alert'
 
-function useQuakeCycle() {
+function useQuakeCycle(region: RegionValue) {
   const feedRef = useRef<QuakeFeed>(EMPTY_FEED)
   const modeRef = useRef<Mode>('monitor')
   const alertQuakeRef = useRef<Quake | null>(null)
@@ -47,8 +49,11 @@ function useQuakeCycle() {
 
   useEffect(() => {
     let stopped = false
+    feedRef.current = EMPTY_FEED // don't show the old region's data while the new one loads
+    cycleIndexRef.current = 0
+
     const poll = () => {
-      fetch('/api/quakes?region=nz')
+      fetch('/api/quakes?region=' + region)
         .then((r) => r.json())
         .then((feed: QuakeFeed) => {
           if (!stopped) feedRef.current = feed
@@ -86,17 +91,19 @@ function useQuakeCycle() {
       if (alertTimer) clearTimeout(alertTimer)
       if (idleTimer) clearTimeout(idleTimer)
     }
-  }, [])
+  }, [region])
 
   return { feedRef, modeRef, alertQuakeRef, alertStartRef, manualTriggerRef }
 }
 
 function ScreenMesh({
+  region,
   feedRef,
   modeRef,
   alertQuakeRef,
   alertStartRef,
 }: {
+  region: RegionValue
   feedRef: MutableRefObject<QuakeFeed>
   modeRef: MutableRefObject<Mode>
   alertQuakeRef: MutableRefObject<Quake | null>
@@ -149,11 +156,13 @@ function ScreenMesh({
         elapsedMs: performance.now() - alertStartRef.current,
       })
     } else {
-      drawMonitorNZ(ctx2d, {
+      drawMonitor(ctx2d, {
+        region,
         latest: feedRef.current.latest,
-        high24: feedRef.current.high24,
+        highs24: feedRef.current.highs24,
         seismoSamples: seismoRef.current,
         nowMs: Date.now(),
+        globeRotation: state.clock.elapsedTime * GLOBE_ROT_RAD_PER_S,
       })
     }
     ctx2d.restore()
@@ -170,15 +179,16 @@ function ScreenMesh({
 
 const BODY_URL = '/models/seismonitor-body.stl'
 const CAP_URL = '/models/seismonitor-base-plate.stl'
-const ROCK_COLOR = '#26251f'
+const ROCK_COLOR = '#50545a' // charcoal -- matches the design handoff's spec'd enclosure colour
 
-function Scene(cycle: ReturnType<typeof useQuakeCycle>) {
+function Scene({ region, cycle }: { region: RegionValue; cycle: ReturnType<typeof useQuakeCycle> }) {
   return (
     <group rotation={[-Math.PI / 2, 0, 0]}>
       <Suspense fallback={null}>
         <BodyMesh url={BODY_URL} color={ROCK_COLOR} />
         <BodyMesh url={CAP_URL} color={ROCK_COLOR} />
         <ScreenMesh
+          region={region}
           feedRef={cycle.feedRef}
           modeRef={cycle.modeRef}
           alertQuakeRef={cycle.alertQuakeRef}
@@ -189,8 +199,14 @@ function Scene(cycle: ReturnType<typeof useQuakeCycle>) {
   )
 }
 
-export default function DeviceViewer({ onReady }: { onReady?: (trigger: () => void) => void }) {
-  const cycle = useQuakeCycle()
+export default function DeviceViewer({
+  region = 'nz',
+  onReady,
+}: {
+  region?: RegionValue
+  onReady?: (trigger: () => void) => void
+}) {
+  const cycle = useQuakeCycle(region)
 
   useEffect(() => {
     if (onReady) onReady(() => cycle.manualTriggerRef.current())
@@ -200,18 +216,17 @@ export default function DeviceViewer({ onReady }: { onReady?: (trigger: () => vo
   return (
     <Canvas shadows dpr={[1, 2]} gl={{ antialias: true }}>
       <PerspectiveCamera makeDefault position={[70, 90, 190]} fov={32} near={1} far={2000} />
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[120, 180, 100]} intensity={1.1} castShadow />
-      <directionalLight position={[-100, 60, -80]} intensity={0.35} color="#7fd69a" />
-      <pointLight position={[0, 40, 120]} intensity={0.3} />
-      <Scene {...cycle} />
+      <ambientLight intensity={0.9} />
+      <hemisphereLight args={['#dfe4e8', '#26251f', 0.6]} />
+      <directionalLight position={[120, 180, 100]} intensity={1.8} castShadow />
+      <directionalLight position={[-100, 60, -80]} intensity={0.5} color="#eef2ee" />
+      <pointLight position={[0, 40, 120]} intensity={0.4} />
+      <Scene region={region} cycle={cycle} />
       <ContactShadows position={[0, -46, 0]} opacity={0.5} scale={220} blur={2.4} far={80} />
       <OrbitControls
         enablePan={false}
         minDistance={110}
         maxDistance={320}
-        autoRotate
-        autoRotateSpeed={0.6}
         target={[0, 8, 0]}
       />
     </Canvas>

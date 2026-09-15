@@ -11,6 +11,7 @@ export interface Quake {
 export interface QuakeFeed {
   latest: Quake | null
   high24: Quake | null
+  highs24: Quake[]
   recent: Quake[]
   source: 'live' | 'fallback'
 }

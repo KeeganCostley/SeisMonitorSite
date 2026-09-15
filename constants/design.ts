@@ -68,11 +68,24 @@ export const COPY = {
   madeIn:      'Made in Aotearoa New Zealand',
 } as const
 
-// ── Pricing ────────────────────────────────────────────────────────────────────
+// -- Pricing ---------------------------------------------------------------------
+// PROTOTYPE: the current hand-assembled run. A studio-designed second edition
+// is in progress -- this generation is explicitly the first/limited run.
 export const PRICING = {
-  productName:   'Seismonitor One',
+  productName:   'Seismonitor -- Prototype 001',
+  productTag:    'First run · hand-assembled · limited',
   priceEarly:    '179',
   priceFull:     '199',
   currency:      'NZD',
   shippingNote:  'Free shipping within NZ · Est. Q4 2025',
+} as const
+
+// DIY: STEP file (fully editable CAD, not just the STL) + we ship the bare
+// ESP32-S3 CYD board -- print your own enclosure and wire it up yourself.
+export const DIY_KIT = {
+  productName:  'DIY Kit',
+  tagline:      'Print it yourself. Customize it yourself.',
+  price:        '59.95',
+  currency:     'NZD',
+  shippingNote: 'Board ships within NZ · Files delivered by email',
 } as const

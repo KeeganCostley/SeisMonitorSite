@@ -1,25 +1,39 @@
 import Navbar   from '@/components/Navbar'
-import Hero     from '@/components/Hero'
 import LiveDemo from '@/components/LiveDemo'
-import Features from '@/components/Features'
-import Gallery  from '@/components/Gallery'
+import WhatItIs from '@/components/WhatItIs'
 import Pricing  from '@/components/Pricing'
 import About    from '@/components/About'
+import Gallery  from '@/components/Gallery'
+import MadeBy   from '@/components/MadeBy'
 import Footer   from '@/components/Footer'
 
 export default function Home() {
   return (
-    <>
-      <Navbar />
-      <main>
-        <Hero />
+    <div className="seismo-90s">
+      <div className="page-col">
+        <Navbar />
+
+        {/* The turnable 3D enclosure is the hero -- first thing you see. */}
         <LiveDemo />
-        <Features />
-        <Gallery />
+        <hr className="dot" />
+
+        <WhatItIs />
+        <hr className="s" />
+
         <Pricing />
+        <hr className="s" />
+
         <About />
-      </main>
-      <Footer />
-    </>
+        <hr className="s" />
+
+        <Gallery />
+        <hr className="s" />
+
+        <MadeBy />
+        <hr className="d" />
+
+        <Footer />
+      </div>
+    </div>
   )
 }

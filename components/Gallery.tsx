@@ -1,81 +1,35 @@
-'use client'
+import { getCopy, c } from '@/lib/copy'
+import GalleryCarousel from './GalleryCarousel'
 
-import { motion } from 'framer-motion'
-import { VARIANTS } from '@/constants/design'
-
-const GALLERY_ITEMS = [
-  { id: 'front',    label: 'Device — front',       span: 'col-span-2 row-span-2' },
-  { id: 'mt-cook',  label: 'Mt Cook edition',       span: 'col-span-1 row-span-1' },
-  { id: 'display',  label: 'Display close-up',      span: 'col-span-1 row-span-1' },
-  { id: 'screen',   label: 'Map view',              span: 'col-span-1 row-span-1' },
-  { id: 'rear',     label: 'Rear panel',            span: 'col-span-1 row-span-1' },
-  { id: 'packag',   label: 'Packaging',             span: 'col-span-2 row-span-1' },
+// #pix -- captions come from copy.md; the actual image files stay fixed
+// (drop new ones in public/photos/ and update the src list below).
+const PHOTO_FILES = [
+  { src: '/photos/desk.png', alt: 'Seismonitor, three-quarter view on the desk', num: 'i', key: 'Photo i caption' },
+  { src: '/photos/front.jpg', alt: 'Seismonitor, front view showing the NZ map', num: 'ii', key: 'Photo ii caption' },
+  { src: '/photos/open.jpg', alt: 'Seismonitor open, board in place', num: 'iii', key: 'Photo iii caption' },
+  { src: '/photos/rear.jpg', alt: 'Seismonitor rear panel showing the USB-C port', num: 'iv', key: 'Photo iv caption' },
+  { src: '/photos/hero.png', alt: 'Seismonitor One, on a desk', num: 'v', key: 'Photo v caption' },
 ]
 
-function Tile({ label, className }: { label: string; className?: string }) {
-  return (
-    <div
-      className={`
-        relative rounded-sm border border-border bg-bg-surface
-        flex items-end p-4 overflow-hidden
-        ${className}
-      `}
-    >
-      {/* Placeholder centre mark */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-8 h-px bg-ink-faint" />
-        <div className="absolute w-px h-8 bg-ink-faint" />
-      </div>
+export default function Gallery() {
+  const copy = getCopy()
+  const photos = PHOTO_FILES.map((p) => ({
+    src: p.src,
+    alt: p.alt,
+    num: p.num,
+    cap: c(copy, p.key),
+  }))
 
-      {/* Label */}
-      <p className="relative z-10 font-mono text-[10px] tracking-widest uppercase text-ink-faint">
-        {label}
+  return (
+    <div className="wrap" id="pix">
+      <h2 className="hd"><span className="n">03</span>{c(copy, 'Gallery -- Section heading', 'Gallery')}</h2>
+      <div className="sublab">{c(copy, 'Gallery -- Section sublabel')}</div>
+
+      <GalleryCarousel photos={photos} />
+
+      <p className="note" style={{ marginTop: 9, textAlign: 'center' }}>
+        {c(copy, 'Closing note')}
       </p>
     </div>
-  )
-}
-
-export default function Gallery() {
-  return (
-    <section id="gallery" className="relative py-24 bg-bg-surface">
-      <div className="divider" />
-
-      <div className="max-w-site mx-auto px-6">
-
-        <motion.p
-          variants={VARIANTS.fadeUp}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.5 }}
-          className="font-mono text-[10px] tracking-widest uppercase text-ink-muted mb-12"
-        >
-          Product photos
-        </motion.p>
-
-        <motion.div
-          variants={VARIANTS.staggerContainer}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.1 }}
-          className="grid grid-cols-2 lg:grid-cols-4 auto-rows-[200px] gap-2"
-        >
-          {GALLERY_ITEMS.map((item) => (
-            <motion.div key={item.id} variants={VARIANTS.cardReveal} className={item.span}>
-              <Tile label={item.label} className="h-full" />
-            </motion.div>
-          ))}
-        </motion.div>
-
-        <motion.p
-          variants={VARIANTS.fadeUp}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true }}
-          className="mt-4 text-ink-faint text-[10px] font-mono"
-        >
-          Photos coming soon.
-        </motion.p>
-      </div>
-    </section>
   )
 }

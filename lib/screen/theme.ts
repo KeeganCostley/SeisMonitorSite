@@ -25,6 +25,32 @@ export const THEME = {
   edgeDim: '#16301f',
 } as const
 
+// Globe colours -- converted from the firmware's RGB565 constants in
+// renderGlobe() (SeisMonitor/src/main.cpp), not re-picked by eye.
+export const GLOBE = {
+  fill: '#001008',
+  limb: '#00ff8c',
+  meshFront: '#00be63',
+  meshBack: '#002400',
+  eqFront: '#00ff63',
+  coastBack: '#002800',
+} as const
+
+export const GLOBE_R = 74.0 // matches the firmware's GLOBE_R exactly (same 320x240 space)
+export const GLOBE_TILT_COS = 0.9131
+export const GLOBE_TILT_SIN = 0.4078
+
+// Region metadata -- values, header labels (CJK rendered directly since the
+// canvas isn't limited to the firmware's bitmap glyph set), and API region key.
+export const REGIONS = [
+  { value: 'nz',         label: 'New Zealand', headerLabel: 'AOTEAROA NEW ZEALAND' },
+  { value: 'japan',      label: 'Japan',       headerLabel: '日本 JAPAN' },
+  { value: 'california', label: 'California',  headerLabel: 'CALIFORNIA, USA' },
+  { value: 'china',      label: 'China',       headerLabel: '中国 CHINA' },
+  { value: 'global',     label: 'Global',      headerLabel: 'GLOBAL' },
+] as const
+export type RegionValue = (typeof REGIONS)[number]['value']
+
 // Severity ramp climbs in both luminance and saturation, so a worse quake
 // reads as a brighter, hotter colour on the additive display (the firmware's
 // old ramp put M7 red as the *dimmest* pixel on screen — this is the design

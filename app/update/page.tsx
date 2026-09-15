@@ -1,13 +1,15 @@
 import type { Metadata } from 'next'
-import Navbar    from '@/components/Navbar'
+import Navbar    from '@/components/UpdateNavbar'
 import FlashTool from '@/components/FlashTool'
-import Footer    from '@/components/Footer'
+import Footer    from '@/components/UpdateFooter'
+import { getCopy, c } from '@/lib/copy'
 
-export const metadata: Metadata = {
-  title: 'Firmware Update — SeisMonitor',
-  description:
-    'Update your SeisMonitor to the latest firmware straight from the browser. ' +
-    'Plug in over USB-C, press the button, done.',
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = getCopy()
+  return {
+    title: c(copy, 'Update page -- Browser tab title', 'Firmware Update \u2014 SeisMonitor'),
+    description: c(copy, 'Update page -- Search description'),
+  }
 }
 
 export default function UpdatePage() {
