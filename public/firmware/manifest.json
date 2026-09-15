@@ -1,22 +1,22 @@
 {
   "name": "SeisMonitor",
-  "version": "7.9",
-  "release_date": "2026-07-28",
+  "version": "10.18",
+  "release_date": "2026-09-15",
   "new_install_prompt_erase": false,
   "notes": [
-    "NZ severity colour now driven by GeoNet's real MMI (felt intensity), not just magnitude + depth",
-    "Alert screen reframed to match the monitor theme, with honest event age",
-    "Globe coastlines rebuilt from Natural Earth 1:110m data",
-    "Smarter text layout: no mid-word chops or collapsed spaces"
+    "Earthquake alerts rebuilt as 3-D terrain — the shockwave ripples across the quake's real landscape, epicentre on its true coordinates",
+    "24-hour high now cycles through every quake within 20% of the day's strongest, not just the single biggest",
+    "WiFi setup: pick your network from a live scanned list, and it reconnects on its own if the connection drops",
+    "NZ severity colour driven by GeoNet's real felt-intensity (MMI), not just magnitude and depth",
+    "Smarter place-name text layout — no more mid-word line breaks"
   ],
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        {
-          "path": "seismonitor-v7.9.bin",
-          "offset": 0
-        }
+        { "path": "seismonitor-v10.18-bootloader.bin", "offset": 0 },
+        { "path": "seismonitor-v10.18-partitions.bin", "offset": 32768 },
+        { "path": "seismonitor-v10.18-app.bin", "offset": 65536 }
       ]
     }
   ]
