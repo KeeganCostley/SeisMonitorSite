@@ -11,8 +11,10 @@
 //  - CSS animation-delay on the alert rings loops from t=0 instead of only
 //    delaying the first cycle (keeps the idle/ambient loop seamless)
 
-import { THEME, SCREEN_W, SCREEN_H, HEADER_H, severityColor } from './theme'
+import { THEME, SCREEN_W, SCREEN_H, HEADER_H, severityColor, GLOBE, GLOBE_R, GLOBE_TILT_COS, GLOBE_TILT_SIN, REGIONS } from './theme'
+import type { RegionValue } from './theme'
 import { nzProject } from './nzCoastline'
+import { GLOBE_COAST } from './globeCoast'
 import { cubicBezier } from './bezier'
 import type { Quake } from '@/lib/quakes/types'
 
@@ -62,11 +64,132 @@ function wrapTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: num
   return [line1, line2]
 }
 
+// Globe projection -- ported from the firmware's globeProject()/renderGlobe()
+// (SeisMonitor/src/main.cpp) with the exact tilt constants and radius, not
+// re-derived. Same orthographic-with-tilt math, same coastline data.
+function globeProject(lat: number, lon: number, cx: number, cy: number, rot: number) {
+  const phi = (lat * Math.PI) / 180
+  const lam = (lon * Math.PI) / 180 + rot
+  const x = Math.cos(phi) * Math.sin(lam)
+  const y = Math.sin(phi)
+  const z = Math.cos(phi) * Math.cos(lam)
+  const y2 = y * GLOBE_TILT_COS - z * GLOBE_TILT_SIN
+  const z2 = y * GLOBE_TILT_SIN + z * GLOBE_TILT_COS
+  return { x: cx + GLOBE_R * x, y: cy - GLOBE_R * y2, front: z2 > 0 }
+}
+
+function drawGlobeMarker(ctx: CanvasRenderingContext2D, q: Quake | null, color: string, cx: number, cy: number, rot: number) {
+  if (!q) return
+  const p = globeProject(q.lat, q.lon, cx, cy, rot)
+  if (!p.front) return // back face -- hidden, the spin reveals it
+  const dx = p.x - cx
+  const dy = p.y - cy
+  const len = Math.max(1, Math.hypot(dx, dy))
+  const ux = dx / len
+  const uy = dy / len
+  const tx = p.x + ux * 12
+  const ty = p.y + uy * 12
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(p.x, p.y)
+  ctx.lineTo(tx, ty)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(p.x, p.y, 4, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(p.x, p.y, 2, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(tx, ty, 1, 0, Math.PI * 2)
+  ctx.fill()
+  const label = 'M' + q.mag.toFixed(1)
+  ctx.font = '6.5px monospace'
+  const lw = ctx.measureText(label).width
+  ctx.textAlign = ux >= 0 ? 'left' : 'right'
+  ctx.fillText(label, ux >= 0 ? tx + 2 : tx - 2, ty - 3)
+  void lw
+}
+
+// Slowly-rotating wireframe globe -- graticule + real Natural Earth coastlines
+// (lib/screen/globeCoast.ts, extracted verbatim from the firmware's
+// SeisCoast.h) + epicentre markers. Drawn in the same translated/clipped
+// coordinate space as the NZ map, centred at (cx,cy).
+function drawGlobe(ctx: CanvasRenderingContext2D, cx: number, cy: number, rot: number, latest: Quake | null, high24: Quake | null) {
+  ctx.fillStyle = GLOBE.fill
+  ctx.beginPath()
+  ctx.arc(cx, cy, GLOBE_R, 0, Math.PI * 2)
+  ctx.fill()
+
+  const drawArc = (points: [number, number][], frontColor: string, backColor: string) => {
+    let have = false
+    let px = 0, py = 0, pf = false
+    for (const [lat, lon] of points) {
+      const p = globeProject(lat, lon, cx, cy, rot)
+      if (have) {
+        ctx.strokeStyle = pf && p.front ? frontColor : (!pf && !p.front ? backColor : '')
+        if (ctx.strokeStyle) {
+          ctx.beginPath()
+          ctx.moveTo(px, py)
+          ctx.lineTo(p.x, p.y)
+          ctx.stroke()
+        }
+      }
+      px = p.x; py = p.y; pf = p.front; have = true
+    }
+  }
+
+  ctx.lineWidth = 0.5
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const pts: [number, number][] = []
+    for (let lon = -180; lon <= 180; lon += 8) pts.push([lat, lon])
+    drawArc(pts, lat === 0 ? GLOBE.eqFront : GLOBE.meshFront, GLOBE.meshBack)
+  }
+  for (let lon = -180; lon < 180; lon += 24) {
+    const pts: [number, number][] = []
+    for (let lat = -90; lat <= 90; lat += 8) pts.push([lat, lon])
+    drawArc(pts, GLOBE.meshFront, GLOBE.meshBack)
+  }
+
+  // Coastlines -- [999,999] is the pen-up sentinel between separate landmasses.
+  ctx.lineWidth = 0.7
+  let have = false
+  let px = 0, py = 0, pf = false
+  for (const [lat, lon] of GLOBE_COAST) {
+    if (lat > 900) { have = false; continue }
+    const p = globeProject(lat, lon, cx, cy, rot)
+    if (have) {
+      const color = pf && p.front ? GLOBE.eqFront : (!pf && !p.front ? GLOBE.coastBack : '')
+      if (color) {
+        ctx.strokeStyle = color
+        ctx.beginPath()
+        ctx.moveTo(px, py)
+        ctx.lineTo(p.x, p.y)
+        ctx.stroke()
+      }
+    }
+    px = p.x; py = p.y; pf = p.front; have = true
+  }
+
+  ctx.strokeStyle = GLOBE.limb
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(cx, cy, GLOBE_R, 0, Math.PI * 2)
+  ctx.stroke()
+
+  drawGlobeMarker(ctx, latest, THEME.latest, cx, cy, rot)
+  drawGlobeMarker(ctx, high24, THEME.highest, cx, cy, rot)
+}
+
 interface MonitorInput {
+  region: RegionValue
   latest: Quake | null
   high24: Quake | null
   seismoSamples: number[]
   nowMs: number
+  globeRotation: number
 }
 
 const PAD = 6
@@ -82,12 +205,14 @@ const DATA_TOP = CONTENT_TOP // 26
 const DATA_H = CONTENT_BOT - CONTENT_TOP - SEISMO_H - GAP // 161
 const SEISMO_TOP = CONTENT_BOT - SEISMO_H // 192
 
-export function drawMonitorNZ(ctx: CanvasRenderingContext2D, input: MonitorInput) {
+export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) {
   const t = THEME
+  const region = input.region
   const latest = input.latest
   const high24 = input.high24
   const seismoSamples = input.seismoSamples
   const nowMs = input.nowMs
+  const globeRotation = input.globeRotation
 
   // background
   ctx.fillStyle = t.bg
@@ -102,14 +227,25 @@ export function drawMonitorNZ(ctx: CanvasRenderingContext2D, input: MonitorInput
   ctx.stroke()
 
   ctx.textBaseline = 'middle'
-  ctx.font = '700 10px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillStyle = t.primary
   ctx.textAlign = 'left'
-  ctx.fillText('\u25C9 SEIS \u00B7 NZ', 10, HEADER_H / 2 + 1)
+  // Full names, matching the real firmware header exactly (SEISMONITOR, not SEIS; the full region
+  // name, not the "NZ" code). Sized down only if it would actually run into the clock/WIFI cluster
+  // on the right -- measured via the canvas's own metrics, not assumed (see [[seismonitor-site]]).
+  const headerText = '\u25C9 SEISMONITOR \u00B7 AOTEAROA NEW ZEALAND'
+  let headerPx = 10
+  ctx.font = '700 ' + headerPx + 'px "JetBrains Mono", ui-monospace, monospace'
+  const rightClusterStart = SCREEN_W - 26 - ctx.measureText('00:00 \u00B7 WIFI').width - 4
+  while (headerPx > 7 && 10 + ctx.measureText(headerText).width > rightClusterStart) {
+    headerPx -= 0.5
+    ctx.font = '700 ' + headerPx + 'px "JetBrains Mono", ui-monospace, monospace'
+  }
+  ctx.fillText(headerText, 10, HEADER_H / 2 + 1)
 
   const clock = new Date(nowMs)
   const hh = String(clock.getHours()).padStart(2, '0')
   const mm = String(clock.getMinutes()).padStart(2, '0')
+  ctx.font = '700 10px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillStyle = t.secondary
   ctx.textAlign = 'right'
   ctx.fillText(hh + ':' + mm + ' \u00B7 WIFI', SCREEN_W - 26, HEADER_H / 2 + 1)
@@ -122,6 +258,8 @@ export function drawMonitorNZ(ctx: CanvasRenderingContext2D, input: MonitorInput
   ctx.stroke()
 
   const cellH = DATA_H / 2
+  // Left-aligned, matching the real firmware's drawDataCell() exactly: label left, magnitude
+  // right-aligned on the same row, place name + meta left below. NOT centred (was the bug).
   const drawCell = (
     cy0: number,
     label: string,
@@ -129,34 +267,37 @@ export function drawMonitorNZ(ctx: CanvasRenderingContext2D, input: MonitorInput
     q: Quake | null,
     fallbackMeta: string
   ) => {
-    const cx = LEFT_X + LEFT_W / 2
+    const xL = LEFT_X + 7
+    const maxW = LEFT_W - 12
+    const rightEdge = xL + maxW
     let y = cy0 + cellH / 2 - 24
-    ctx.textAlign = 'center'
+    ctx.textAlign = 'left'
     ctx.font = '700 8px "JetBrains Mono", ui-monospace, monospace'
     ctx.fillStyle = labelColor
-    ctx.fillText(label, cx, y)
-    y += 15
+    ctx.fillText(label, xL, y)
+    ctx.textAlign = 'right'
     ctx.font = '700 18px "JetBrains Mono", ui-monospace, monospace'
     ctx.fillStyle = labelColor
-    ctx.fillText(q ? 'M' + q.mag.toFixed(1) : '\u2014', cx, y)
+    ctx.fillText(q ? 'M' + q.mag.toFixed(1) : '\u2014', rightEdge, y)
     y += 15
+    ctx.textAlign = 'left'
     ctx.font = '700 11.5px Inter, sans-serif'
     ctx.fillStyle = t.ink
     const place = q ? q.place : 'Awaiting data...'
-    if (ctx.measureText(place).width > LEFT_W - 12) {
-      const wrapped = wrapTwoLines(ctx, place, LEFT_W - 12)
-      ctx.fillText(wrapped[0], cx, y)
+    if (ctx.measureText(place).width > maxW) {
+      const wrapped = wrapTwoLines(ctx, place, maxW)
+      ctx.fillText(wrapped[0], xL, y)
       if (wrapped[1]) {
         y += 13
-        ctx.fillText(wrapped[1], cx, y)
+        ctx.fillText(wrapped[1], xL, y)
       }
     } else {
-      ctx.fillText(place, cx, y)
+      ctx.fillText(place, xL, y)
     }
     y += 15
     ctx.font = '400 8px "JetBrains Mono", ui-monospace, monospace'
     ctx.fillStyle = t.secondary
-    ctx.fillText(q ? formatAgo(q.time, nowMs) + ' AGO \u00B7 ' + Math.round(q.depth) + 'KM' : fallbackMeta, cx, y)
+    ctx.fillText(q ? formatAgo(q.time, nowMs) + ' AGO \u00B7 ' + Math.round(q.depth) + 'KM' : fallbackMeta, xL, y)
   }
 
   drawCell(DATA_TOP, '\u25C6 LATEST', t.latest, latest, '')
@@ -360,6 +501,12 @@ export function drawMonitorNZ(ctx: CanvasRenderingContext2D, input: MonitorInput
   drawMarker(high24, t.highest, 8, 0.1, 3.5, 1.7)
   ctx.restore()
   ctx.restore()
+
+  // Data-source credit, bottom-right of the map panel -- matches the real firmware exactly.
+  ctx.textAlign = 'right'
+  ctx.font = '6.5px monospace'
+  ctx.fillStyle = t.secondary
+  ctx.fillText('POWERED BY GEONET', mpX + mpW - 6, mpY + mpH - 8)
 }
 
 interface AlertInput {
