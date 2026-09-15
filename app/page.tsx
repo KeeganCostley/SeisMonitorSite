@@ -1,5 +1,6 @@
 import Navbar   from '@/components/Navbar'
 import Hero     from '@/components/Hero'
+import LiveDemo from '@/components/LiveDemo'
 import Features from '@/components/Features'
 import Gallery  from '@/components/Gallery'
 import Pricing  from '@/components/Pricing'
@@ -12,6 +13,7 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <LiveDemo />
         <Features />
         <Gallery />
         <Pricing />

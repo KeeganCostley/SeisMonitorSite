@@ -1,0 +1,23 @@
+{
+  "name": "SeisMonitor",
+  "version": "7.9",
+  "release_date": "2026-07-28",
+  "new_install_prompt_erase": false,
+  "notes": [
+    "NZ severity colour now driven by GeoNet's real MMI (felt intensity), not just magnitude + depth",
+    "Alert screen reframed to match the monitor theme, with honest event age",
+    "Globe coastlines rebuilt from Natural Earth 1:110m data",
+    "Smarter text layout: no mid-word chops or collapsed spaces"
+  ],
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "seismonitor-v7.9.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}

@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 
 const NAV_LINKS = [
-  { label: 'Features', href: '#features' },
-  { label: 'Gallery',  href: '#gallery'  },
-  { label: 'Pricing',  href: '#pricing'  },
-  { label: 'About',    href: '#about'    },
+  { label: 'Live demo', href: '/#demo'     },
+  { label: 'Features',  href: '/#features' },
+  { label: 'Gallery',   href: '/#gallery'  },
+  { label: 'Pricing',   href: '/#pricing'  },
+  { label: 'About',     href: '/#about'    },
+  { label: 'Update',    href: '/update'    },
 ]
 
 export default function Navbar() {
@@ -32,7 +34,7 @@ export default function Navbar() {
       <nav className="max-w-site mx-auto px-6 h-14 flex items-center justify-between">
 
         {/* Logo — plain, no flash */}
-        <a href="#" className="font-heading font-semibold tracking-[0.2em] text-xs uppercase text-ink">
+        <a href="/" className="font-heading font-semibold tracking-[0.2em] text-xs uppercase text-ink">
           Seismonitor
         </a>
 
@@ -53,7 +55,7 @@ export default function Navbar() {
         {/* CTA — understated */}
         <div className="hidden md:block">
           <a
-            href="#pricing"
+            href="/#pricing"
             className="text-xs tracking-widest uppercase text-ink-muted hover:text-sage transition-colors duration-300"
           >
             Waitlist →
@@ -94,7 +96,7 @@ export default function Navbar() {
             ))}
             <li>
               <a
-                href="#pricing"
+                href="/#pricing"
                 onClick={() => setMenuOpen(false)}
                 className="text-xs tracking-widest uppercase text-sage"
               >
