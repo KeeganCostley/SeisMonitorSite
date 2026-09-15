@@ -17,6 +17,24 @@ import { nzProject } from './nzCoastline'
 import { GLOBE_COAST } from './globeCoast'
 import { cubicBezier } from './bezier'
 import type { Quake } from '@/lib/quakes/types'
+import { drawRegionMap, drawRegionMarker, type RegionMapData } from './regionMaps'
+import { JAPAN_BOUNDS, JAPAN_LAND, JAPAN_FEATURES, JAPAN_CITIES } from './japanCoastline'
+import { CHINA_BOUNDS, CHINA_LAND, CHINA_FEATURES, CHINA_CITIES } from './chinaCoastline'
+import {
+  CALIFORNIA_BOUNDS, CALIFORNIA_LAND, CALIFORNIA_FEATURES, CALIFORNIA_CITIES, CALIFORNIA_ISLETS,
+  CALIFORNIA_SALTONSEA,
+} from './californiaCoastline'
+
+// Real flat maps for the three regions that used to fall back to the globe -- data extracted
+// verbatim from the firmware's drawJapanMap()/drawChinaMap()/drawCaliforniaMap() (see each
+// *Coastline.ts file's header). China gets a wider box (matches the firmware's special-cased
+// mapBoxW()/mapBoxH() -- its bounds are much wider than tall, so the default NZ-shaped box would
+// letterbox it down to a sliver).
+const REGION_MAP_DATA: Partial<Record<RegionValue, RegionMapData & { boxW: number; boxH: number }>> = {
+  japan:      { bounds: JAPAN_BOUNDS,      land: JAPAN_LAND,      features: JAPAN_FEATURES,      cities: JAPAN_CITIES,      boxW: 150, boxH: 190 },
+  china:      { bounds: CHINA_BOUNDS,      land: CHINA_LAND,      features: CHINA_FEATURES,      cities: CHINA_CITIES,      boxW: 194, boxH: 202 },
+  california: { bounds: CALIFORNIA_BOUNDS, land: CALIFORNIA_LAND, features: CALIFORNIA_FEATURES, cities: CALIFORNIA_CITIES, islets: CALIFORNIA_ISLETS, boxW: 150, boxH: 190 },
+}
 
 const ringEase = cubicBezier(0, 0.45, 0.5, 1)
 
@@ -523,10 +541,38 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
     drawMarker(latest, t.latest, 9, 0.12, 4.5, 2)
     drawMarker(high24, t.highest, 8, 0.1, 3.5, 1.7)
     ctx.restore()
+  } else if (REGION_MAP_DATA[region]) {
+    const rd = REGION_MAP_DATA[region]!
+    const gx = cx - rd.boxW / 2
+    const gy = cy - rd.boxH / 2
+    ctx.save()
+    ctx.translate(gx, gy)
+    const project = drawRegionMap(ctx, rd.boxW, rd.boxH, rd)
+
+    if (region === 'california') {
+      // Salton Sea -- dark inland lake, a recognisable and seismically busy landmark.
+      const [ssx, ssy] = project(CALIFORNIA_SALTONSEA.lat, CALIFORNIA_SALTONSEA.lon)
+      ctx.fillStyle = t.bg
+      ctx.beginPath()
+      ctx.ellipse(ssx, ssy, 3, 4, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = t.edge
+      ctx.lineWidth = 0.6
+      ctx.stroke()
+    }
+
+    if (latest) {
+      const [x, y] = project(latest.lat, latest.lon)
+      drawRegionMarker(ctx, x, y, rd.boxW / 2, rd.boxH / 2, t.latest, 9, 0.12, 4.5, 2)
+    }
+    if (high24) {
+      const [x, y] = project(high24.lat, high24.lon)
+      drawRegionMarker(ctx, x, y, rd.boxW / 2, rd.boxH / 2, t.highest, 8, 0.1, 3.5, 1.7)
+    }
+    ctx.restore()
   } else {
-    // No dedicated flat map ported yet for Japan/California/China -- the globe
-    // is a real, accurate fallback for all non-NZ regions (matches what the
-    // firmware itself falls back to before a region's map exists).
+    // Global (and any future region without a dedicated map yet) -- the globe is the
+    // accurate fallback, matching what the firmware itself falls back to.
     drawGlobe(ctx, cx, cy, globeRotation, latest, high24)
   }
   ctx.restore()
@@ -596,9 +642,29 @@ export function drawAlert(ctx: CanvasRenderingContext2D, input: AlertInput) {
   ctx.fillStyle = c
   ctx.fillText('M' + quake.mag.toFixed(1), rightEdge, SCREEN_H - 54)
 
-  ctx.font = '700 22px Inter, sans-serif'
+  // Place name: shrink to fit, then wrap to 2 lines if even the smallest comfortable size still
+  // wouldn't -- the old fixed-22px draw had no width check at all, so a longer real place name
+  // (GeoNet/USGS strings regularly run 25-35 chars) would run straight off the left edge of the screen.
   ctx.fillStyle = THEME.ink
-  ctx.fillText(quake.place, rightEdge, SCREEN_H - 30)
+  // The text is RIGHT-anchored at rightEdge, so the width cap is what sets how far its LEFT edge can
+  // reach -- cap it against the same 16px margin the right edge itself uses (not an arbitrary number),
+  // so a long name can't creep past a comfortable left margin the way "229 km E of Tadine, New
+  // Caledonia" did when this was first tried at SCREEN_W-20 (only ~4px of true left margin at max width).
+  const placeLeftMargin = 16
+  const placeMaxW = rightEdge - placeLeftMargin
+  let placeSize = 22
+  ctx.font = '700 ' + placeSize + 'px Inter, sans-serif'
+  while (placeSize > 14 && ctx.measureText(quake.place).width > placeMaxW) {
+    placeSize -= 1
+    ctx.font = '700 ' + placeSize + 'px Inter, sans-serif'
+  }
+  if (ctx.measureText(quake.place).width > placeMaxW) {
+    const [line1, line2] = wrapTwoLines(ctx, quake.place, placeMaxW)
+    ctx.fillText(line1, rightEdge, SCREEN_H - 30 - (placeSize + 3))
+    ctx.fillText(line2, rightEdge, SCREEN_H - 30)
+  } else {
+    ctx.fillText(quake.place, rightEdge, SCREEN_H - 30)
+  }
 
   ctx.font = '13px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillStyle = c
