@@ -359,7 +359,7 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
   const sy = SEISMO_TOP + 1
   const sw = LEFT_W - 2
   const sh = SEISMO_H - 2
-  ctx.strokeStyle = t.ring1
+  ctx.strokeStyle = t.seismoGrid
   ctx.lineWidth = 0.3
   for (let i = 0; i < 3; i++) {
     const y = sy + ((i + 1) * sh) / 4
@@ -380,7 +380,7 @@ export function drawMonitor(ctx: CanvasRenderingContext2D, input: MonitorInput) 
     ctx.stroke()
   }
   ctx.globalAlpha = 1
-  ctx.strokeStyle = t.ring3
+  ctx.strokeStyle = t.sub
   ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(sx, sy + sh / 2)

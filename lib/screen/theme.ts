@@ -17,10 +17,25 @@ export const THEME = {
   highest: '#d4e88a',
   mapLand: '#0c1813',
   mapOutline: '#00b347',
-  ring1: '#0e1c17',
-  ring2: '#16291f',
-  ring3: '#20392b',
-  ring4: '#2b4938',
+  // Map distance rings -- converted from the firmware's CURRENT constants (main.cpp: t.ring1=0x0820
+  // "softer", t.ring2=0x0841, t.ring3=0x10A2, t.ring4=0x18E3), not the original design-handoff mockup
+  // (sm-land-rings.jsx) this theme was first ported from. The firmware deliberately dimmed these after
+  // that mockup -- its own "softer" comment says so -- to the point the inner 3 rings are barely
+  // perceptible against the background and only the outermost is faintly visible; the mockup's much
+  // brighter values (#0e1c17...#2b4938, previously used here) made all four look bold and equal, which
+  // is what didn't match the real device. Confirmed by encoding each value with the exact truncation
+  // the firmware's own documented pair uses (0x08E2 -> "#0e1c17" in its comment: R8=R5<<3|R5>>2 etc.)
+  // and checking it round-trips back to the same uint16 constant.
+  ring1: '#080400',
+  ring2: '#080808',
+  ring3: '#101410',
+  ring4: '#181c18',
+  // Seismograph panel grid -- this is what the mockup's "ring1" (#0e1c17) actually corresponds to in
+  // the firmware: a DIFFERENT constant (seismoGrid), not the map's ring1. Kept at the original bright
+  // mockup value since that's genuinely still what the firmware uses for it (see main.cpp: t.seismoGrid
+  // = 0x08E2 // #0e1c17 ring1 -- the "ring1" in that comment is just its own historical name from the
+  // mockup, not a claim that it equals the map's ring1).
+  seismoGrid: '#0e1c17',
   edge: '#234a36',
   edgeDim: '#16301f',
 } as const
