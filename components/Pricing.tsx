@@ -1,6 +1,7 @@
 import { getCopy, c } from '@/lib/copy'
 import { renderInline, linkifyWord } from '@/lib/renderInline'
 import OrderForm from './OrderForm'
+import CheckoutButtons from './CheckoutButtons'
 
 export default function Pricing() {
   const copy = getCopy()
@@ -30,7 +31,7 @@ export default function Pricing() {
           </tr>
           <tr>
             <td className="k">Your email</td>
-            <td><OrderForm buttonLabel={c(copy, 'Tier 1 -- Assembled -- Order button', 'Order')} /></td>
+            <td><CheckoutButtons productId="prototype-001" /></td>
           </tr>
           <tr>
             <td className="k">Then what</td>
@@ -65,7 +66,7 @@ export default function Pricing() {
           </tr>
           <tr>
             <td className="k">Your email</td>
-            <td><OrderForm buttonLabel={c(copy, 'Tier 2 -- DIY Kit -- Order button', 'Order')} /></td>
+            <td><CheckoutButtons productId="diy-kit" /></td>
           </tr>
           <tr>
             <td className="k">Then what</td>
